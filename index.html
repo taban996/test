@@ -110,14 +110,14 @@ button{background:#22c55e;color:#fff;font-weight:800}
  <h3 style="text-align:center">📲 Payment</h3>
 
  <div class="idbox" style="text-align:center">
-  <div id="qr" style="margin:auto;width:220px"></div>
+  <div id="qr" style="margin:auto;width:220px;height:220px"></div>
   <p style="margin-top:10px">
    Pay ₹<b id="payAmount">0</b><br>
    to <b id="upi">Loading...</b>
   </p>
  </div>
 
- <input id="utr" placeholder="Enter 12 Digit UTR">
+ <input id="utr" placeholder="Enter 12 Digit UTR" maxlength="12">
  <button onclick="submitPayment()">Submit</button>
 </div>
 
@@ -135,7 +135,7 @@ button{background:#22c55e;color:#fff;font-weight:800}
 
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
@@ -168,8 +168,8 @@ onValue(ref(db,"settings/pricePerId"),s=>{
  calc();
 });
 
-onValue(ref(db,"stock/verified"),s=>vStock.innerText=s.size);
-onValue(ref(db,"stock/normal"),s=>nStock.innerText=s.size);
+onValue(ref(db,"stock/verified"),s=>vStock.innerText=s.size||0);
+onValue(ref(db,"stock/normal"),s=>nStock.innerText=s.size||0);
 
 onValue(ref(db,"settings/upi"),s=>{
  if(s.exists()) upi.innerText=s.val();
@@ -177,6 +177,7 @@ onValue(ref(db,"settings/upi"),s=>{
 
 qty.oninput=calc;
 type.onchange=calc;
+
 function calc(){
  const q=Number(qty.value||0);
  finalAmount=q*(prices[type.value]||0);
@@ -203,10 +204,9 @@ function generateQR(){
  qr.innerHTML="";
  payAmount.innerText=finalAmount;
 
- const upiLink=
- `upi://pay?pa=${upi.innerText}&pn=SupermanStore&am=${finalAmount}&cu=INR`;
+ const upiLink=`upi://pay?pa=${upi.innerText}&pn=SupermanStore&am=${finalAmount}&cu=INR`;
 
- new QRCode(qr,{
+ const qrObj=new QRCode(qr,{
   text:upiLink,
   width:220,
   height:220,
@@ -215,38 +215,41 @@ function generateQR(){
 
  setTimeout(()=>{
   const canvas=qr.querySelector("canvas");
-  if(!canvas)return;
+  if(!canvas) return;
+
   const ctx=canvas.getContext("2d");
   const logo=new Image();
   logo.src="bharatpe.png";
 
   logo.onload=()=>{
-   const s=48;
-   const x=(canvas.width-s)/2;
-   const y=(canvas.height-s)/2;
+   const size=48;
+   const x=(canvas.width-size)/2;
+   const y=(canvas.height-size)/2;
    ctx.fillStyle="#fff";
-   ctx.fillRect(x-4,y-4,s+8,s+8);
-   ctx.drawImage(logo,x,y,s,s);
+   ctx.fillRect(x-5,y-5,size+10,size+10);
+   ctx.drawImage(logo,x,y,size,size);
   };
- },300);
+ },400);
 }
 
 window.submitPayment=()=>{
  const u=utr.value.trim();
  if(!/^[0-9]{12}$/.test(u)){
-  alert("❌ UTR must be 12 digits");
+  alert("❌ UTR must be exactly 12 digits");
   return;
  }
+
  push(ref(db,"orders/"+currentOrder+"/payment"),{
   utr:u,
   amount:finalAmount,
   time:Date.now()
  });
+
  alert("✅ Payment submitted. Wait for admin verification");
 };
 
 onValue(ref(db,"deliveries"),snap=>{
- if(!currentOrder||!snap.child(currentOrder).exists())return;
+ if(!currentOrder || !snap.child(currentOrder).exists()) return;
  delivery.style.display="block";
  delivered.innerHTML="";
  snap.child(currentOrder).forEach(d=>{
