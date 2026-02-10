@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SupermanStore</title>
+
+<style>
+*{box-sizing:border-box;font-family:system-ui}
+body{
+ margin:0;
+ background:linear-gradient(180deg,#6b5cff,#7a6df5);
+}
+.container{max-width:420px;margin:auto;padding:14px}
+.header,.card,.infoBox{
+ background:#fff;
+ border-radius:16px;
+ padding:14px;
+ margin-bottom:14px;
+ box-shadow:0 10px 25px rgba(0,0,0,.15);
+}
+.header{text-align:center;font-weight:800;color:#4f46e5}
+.hero{
+ background:#4f46e5;
+ color:#fff;
+ border-radius:18px;
+ padding:18px;
+ text-align:center;
+ margin-bottom:16px;
+}
+.stock{display:flex;gap:12px}
+.stockBox{
+ flex:1;
+ padding:14px;
+ border-radius:16px;
+ text-align:center;
+ color:#fff;
+}
+.verified{background:#22c55e}
+.normal{background:#6366f1}
+.stockBox b{font-size:28px}
+.price{margin-top:6px;font-weight:800}
+select,input,button{
+ width:100%;
+ padding:14px;
+ margin-top:10px;
+ border-radius:14px;
+ border:none;
+ font-size:15px;
+}
+input,select{background:#f1f5f9}
+button{background:#22c55e;color:#fff;font-weight:800}
+.total{text-align:center;font-size:26px;font-weight:900;color:#4f46e5}
+.idbox{
+ background:#f8fafc;
+ border-radius:14px;
+ padding:12px;
+ margin-top:10px;
+ font-size:14px;
+}
+.notice{
+ background:#dcfce7;
+ color:#166534;
+ padding:10px;
+ border-radius:14px;
+ margin-bottom:12px;
+ display:none;
+}
+.info{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="header">⚡ SUPERMANSTORE</div>
+
+<div class="hero">
+ <h2>WELCOME TO MY VIP STORE</h2>
+ <p>Premium Fresh IDs • Instant Delivery</p>
+</div>
+
+<div id="notice" class="notice"></div>
+
+<div class="card stock">
+ <div class="stockBox verified">
+  <h3>✓ Verified IDs</h3>
+  <b id="vStock">0</b>
+  <div class="price">₹<span id="vPrice">0</span>/ID</div>
+ </div>
+ <div class="stockBox normal">
+  <h3>Normal IDs</h3>
+  <b id="nStock">0</b>
+  <div class="price">₹<span id="nPrice">0</span>/ID</div>
+ </div>
+</div>
+
+<div class="card">
+ <h3 style="text-align:center">✨ Custom Package</h3>
+ <select id="type">
+  <option value="normal">Normal IDs</option>
+  <option value="verified">Verified IDs</option>
+ </select>
+ <input type="number" id="qty" placeholder="Enter Quantity">
+ <div class="total">₹ <span id="total">0</span></div>
+ <button onclick="buy()">Buy Now</button>
+</div>
+
+<div class="card" id="payment" style="display:none">
+ <h3 style="text-align:center">📲 Payment</h3>
+
+ <div class="idbox" style="text-align:center">
+  <div id="qr" style="margin:auto;width:220px"></div>
+  <p style="margin-top:10px">
+   Pay ₹<b id="payAmount">0</b><br>
+   to <b id="upi">Loading...</b>
+  </p>
+ </div>
+
+ <input id="utr" placeholder="Enter 12 Digit UTR">
+ <button onclick="submitPayment()">Submit</button>
+</div>
+
+<div class="card" id="delivery" style="display:none">
+ <h3 style="text-align:center">✅ Delivered IDs</h3>
+ <div id="delivered"></div>
+</div>
+
+<div class="info">
+ <div class="infoBox">🔐<b>100% Secure</b></div>
+ <div class="infoBox">⚡<b>Instant Delivery</b></div>
+ <div class="infoBox">🎧<b>24/7 Support</b></div>
+ <div class="infoBox">🆕<b>Fresh IDs</b></div>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getDatabase, ref, onValue, push } 
+from "https://www.gstatic.com/firebasejs/12.8.0/firebase-database.js";
+
+const app = initializeApp({
+ apiKey:"AIzaSyBsXjaE79VElBzZ6ALJTn3g-SyKWQKN6C8",
+ authDomain:"bestseller-28a56.firebaseapp.com",
+ databaseURL:"https://bestseller-28a56-default-rtdb.firebaseio.com",
+ projectId:"bestseller-28a56"
+});
+const db=getDatabase(app);
+
+let prices={verified:0,normal:0};
+let finalAmount=0,currentOrder=null;
+
+onValue(ref(db,"settings/shopOpen"),s=>{
+ if(s.exists() && !s.val()){
+  notice.innerText="❌ Shop Closed";
+  notice.style.display="block";
+ }
+});
+
+onValue(ref(db,"settings/pricePerId"),s=>{
+ prices.verified=s.val()||0;
+ prices.normal=Math.floor(prices.verified/4);
+ vPrice.innerText=prices.verified;
+ nPrice.innerText=prices.normal;
+ calc();
+});
+
+onValue(ref(db,"stock/verified"),s=>vStock.innerText=s.size);
+onValue(ref(db,"stock/normal"),s=>nStock.innerText=s.size);
+
+onValue(ref(db,"settings/upi"),s=>{
+ if(s.exists()) upi.innerText=s.val();
+});
+
+qty.oninput=calc;
+type.onchange=calc;
+function calc(){
+ const q=Number(qty.value||0);
+ finalAmount=q*(prices[type.value]||0);
+ total.innerText=finalAmount;
+}
+
+window.buy=()=>{
+ const q=Number(qty.value);
+ if(q<=0) return alert("Invalid Quantity");
+
+ currentOrder=push(ref(db,"orders"),{
+  qty:q,
+  type:type.value,
+  amount:finalAmount,
+  status:"pending",
+  time:Date.now()
+ }).key;
+
+ payment.style.display="block";
+ generateQR();
+};
+
+function generateQR(){
+ qr.innerHTML="";
+ payAmount.innerText=finalAmount;
+
+ const upiLink=
+ `upi://pay?pa=${upi.innerText}&pn=SupermanStore&am=${finalAmount}&cu=INR`;
+
+ new QRCode(qr,{
+  text:upiLink,
+  width:220,
+  height:220,
+  correctLevel:QRCode.CorrectLevel.H
+ });
+
+ setTimeout(()=>{
+  const canvas=qr.querySelector("canvas");
+  if(!canvas)return;
+  const ctx=canvas.getContext("2d");
+  const logo=new Image();
+  logo.src="bharatpe.png";
+
+  logo.onload=()=>{
+   const s=48;
+   const x=(canvas.width-s)/2;
+   const y=(canvas.height-s)/2;
+   ctx.fillStyle="#fff";
+   ctx.fillRect(x-4,y-4,s+8,s+8);
+   ctx.drawImage(logo,x,y,s,s);
+  };
+ },300);
+}
+
+window.submitPayment=()=>{
+ const u=utr.value.trim();
+ if(!/^[0-9]{12}$/.test(u)){
+  alert("❌ UTR must be 12 digits");
+  return;
+ }
+ push(ref(db,"orders/"+currentOrder+"/payment"),{
+  utr:u,
+  amount:finalAmount,
+  time:Date.now()
+ });
+ alert("✅ Payment submitted. Wait for admin verification");
+};
+
+onValue(ref(db,"deliveries"),snap=>{
+ if(!currentOrder||!snap.child(currentOrder).exists())return;
+ delivery.style.display="block";
+ delivered.innerHTML="";
+ snap.child(currentOrder).forEach(d=>{
+  const v=d.val();
+  delivered.innerHTML+=`
+   <div class="idbox">
+    User: ${v.username}<br>
+    Pass: ${v.password}<br>
+    Phone: ${v.phone}<br>
+    Email: ${v.email}
+   </div>`;
+ });
+});
+</script>
+</body>
+</html>
